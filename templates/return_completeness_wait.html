@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bilder werden analysiert</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: #0f172a;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .card {
+      width: min(520px, 100%);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 20px;
+      padding: 34px 24px;
+      box-shadow: 0 20px 55px rgba(0,0,0,0.35);
+    }
+
+    .spinner {
+      width: 58px;
+      height: 58px;
+      border: 6px solid rgba(255,255,255,0.25);
+      border-top-color: white;
+      border-radius: 50%;
+      margin: 0 auto 24px auto;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    h1 {
+      font-size: 26px;
+      margin: 0 0 14px 0;
+      line-height: 1.25;
+    }
+
+    p {
+      font-size: 18px;
+      line-height: 1.45;
+      margin: 10px 0;
+      color: #e5e7eb;
+    }
+
+    .tool {
+      margin-top: 18px;
+      font-size: 16px;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h1>Die Bilder werden gerade analysiert.</h1>
+    <p>Bitte haben Sie ein bisschen Geduld.</p>
+    <p class="tool">{{ loan.tool_name }}</p>
+  </div>
+
+  <script>
+    const statusUrl = "{{ url_for('return_completeness_status', loan_id=loan.loan_id) }}";
+    const fallbackResultUrl = "{{ url_for('return_result', loan_id=loan.loan_id) }}";
+
+    const minWaitMs = 1200;
+    const startTime = Date.now();
+
+    async function pollStatus() {
+      try {
+        const response = await fetch(statusUrl, { cache: "no-store" });
+        const data = await response.json();
+
+        const elapsed = Date.now() - startTime;
+
+        if (data.ready && elapsed >= minWaitMs) {
+          window.location.href = data.result_url || fallbackResultUrl;
+          return;
+        }
+
+        setTimeout(pollStatus, data.ready ? (minWaitMs - elapsed) : 700);
+      } catch (error) {
+        console.error(error);
+        setTimeout(pollStatus, 1000);
+      }
+    }
+
+    pollStatus();
+  </script>
+</body>
+</html>

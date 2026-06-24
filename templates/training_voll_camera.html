@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trainingsfoto aufnehmen</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      color: #222;
+      text-align: center;
+    }
+
+    .camera-area {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      box-sizing: border-box;
+    }
+
+    .camera-frame {
+      border: 4px solid white;
+      background: #222;
+      overflow: hidden;
+      position: relative;
+      border-radius: 10px;
+    }
+
+    .camera-frame-landscape {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 4 / 3;
+    }
+
+    .camera-frame-portrait {
+      width: 70%;
+      max-width: 360px;
+      aspect-ratio: 3 / 4;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: black;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    video::-webkit-media-controls {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+      -webkit-appearance: none;
+    }
+
+    video::-webkit-media-controls-play-button {
+      display: none !important;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    .tool-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .info-area {
+      padding: 22px;
+      box-sizing: border-box;
+      background: white;
+    }
+
+    h1 {
+      font-size: 30px;
+      margin: 8px 0 12px 0;
+      line-height: 1.15;
+    }
+
+    p {
+      font-size: 18px;
+      line-height: 1.45;
+      margin: 12px 0;
+    }
+
+    .tool {
+      font-weight: bold;
+      color: #2563eb;
+      font-size: 22px;
+    }
+
+    button {
+      width: 100%;
+      padding: 18px 20px;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      margin-top: 16px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .return-button {
+      display: block;
+      margin-top: 18px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: #374151;
+      color: white;
+      text-decoration: none;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .warning {
+      color: red;
+      font-weight: bold;
+    }
+
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+
+    .resolution {
+      font-size: 16px;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    @media (min-width: 700px) {
+      button {
+        width: auto;
+        min-width: 280px;
+      }
+
+      .return-button {
+        display: inline-block;
+        min-width: 240px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="camera-area">
+    <div class="camera-frame
+      {% if tool.orientation == 'portrait' %}
+        camera-frame-portrait
+      {% else %}
+        camera-frame-landscape
+      {% endif %}
+    ">
+      <video
+        id="video"
+        autoplay
+        playsinline
+        webkit-playsinline
+        muted
+        disablepictureinpicture
+        controlslist="nodownload noplaybackrate noremoteplayback"
+      ></video>
+
+      <img class="tool-overlay" src="{{ url_for('static', filename=tool.overlay) }}">
+
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <div class="info-area">
+    <h1>Trainingsfoto aufnehmen</h1>
+
+    <p>
+      Werkzeug:<br>
+      <span class="tool">{{ tool.display_name }}</span>
+    </p>
+
+    <p>
+      Legen Sie das Werkzeug alleine, nah und passend in den angezeigten Umriss.
+      Drücken Sie danach auf <b>Take Photo</b>.
+    </p>
+
+    <button type="button" onclick="takePhoto()">Take Photo</button>
+
+    <p id="message"></p>
+    <p id="resolutionInfo" class="resolution"></p>
+
+    <a class="return-button" href="{{ url_for('training_voll_master') }}">Return</a>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const message = document.getElementById("message");
+    const resolutionInfo = document.getElementById("resolutionInfo");
+
+    const isPortraitTool = "{{ tool.orientation }}" === "portrait";
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 4032 },
+            height: { ideal: 3024 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        video.muted = true;
+        video.controls = false;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
+
+        await video.play();
+
+        setTimeout(() => {
+          resolutionInfo.innerHTML =
+            "Kamera-Auflösung: " + video.videoWidth + " × " + video.videoHeight;
+        }, 500);
+
+      } catch (error) {
+        message.innerHTML = "Kamera konnte nicht geöffnet werden.";
+        message.className = "warning";
+        console.error(error);
+      }
+    }
+
+    async function takePhoto() {
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+
+      if (!videoWidth || !videoHeight) {
+        message.innerHTML = "Kamera ist noch nicht bereit. Bitte kurz warten.";
+        message.className = "warning";
+        return;
+      }
+
+      const targetAspect = isPortraitTool ? (3 / 4) : (4 / 3);
+      const videoAspect = videoWidth / videoHeight;
+
+      let sx, sy, sWidth, sHeight;
+
+      if (videoAspect > targetAspect) {
+        // Kamerabild ist breiter als Zielrahmen -> links/rechts abschneiden
+        sHeight = videoHeight;
+        sWidth = videoHeight * targetAspect;
+        sx = (videoWidth - sWidth) / 2;
+        sy = 0;
+      } else {
+        // Kamerabild ist höher/schmaler als Zielrahmen -> oben/unten abschneiden
+        sWidth = videoWidth;
+        sHeight = videoWidth / targetAspect;
+        sx = 0;
+        sy = (videoHeight - sHeight) / 2;
+      }
+
+      
+      const outputWidth = Math.round(sWidth);
+      const outputHeight = Math.round(sHeight);
+
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+
+      const context = canvas.getContext("2d");
+
+      context.drawImage(
+        video,
+        sx, sy, sWidth, sHeight,
+        0, 0, outputWidth, outputHeight
+      );
+
+      message.innerHTML = "Trainingsbild wird gespeichert...";
+      message.className = "";
+
+      const imageData = canvas.toDataURL("image/jpeg", 0.98);
+
+      try {
+        const response = await fetch("{{ url_for('save_training_voll_photo', tool_key=tool_key) }}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            image: imageData
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          message.innerHTML =
+            "Trainingsbild wurde gespeichert. Bildgröße: " +
+            outputWidth + " × " + outputHeight;
+          message.className = "success";
+        } else {
+          message.innerHTML = "Trainingsbild konnte nicht gespeichert werden.";
+          message.className = "warning";
+        }
+      } catch (error) {
+        message.innerHTML = "Fehler beim Speichern des Trainingsbildes.";
+        message.className = "warning";
+        console.error(error);
+      }
+    }
+
+    startCamera();
+  </script>
+
+</body>
+</html>

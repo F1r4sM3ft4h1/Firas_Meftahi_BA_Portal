@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Werkzeug</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      color: #222;
+      text-align: center;
+    }
+
+    .box {
+      background: white;
+      width: calc(100% - 24px);
+      max-width: 650px;
+      margin: 12px auto;
+      padding: 22px;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin: 10px 0 24px 0;
+      line-height: 1.2;
+    }
+
+    .info-card {
+      text-align: left;
+      background: #f8fafc;
+      border: 1px solid #d0d7de;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .row {
+      padding: 16px;
+      border-bottom: 1px solid #d0d7de;
+    }
+
+    .row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      display: block;
+      font-size: 15px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .value {
+      display: block;
+      font-size: 21px;
+      font-weight: bold;
+    }
+
+    .status-verfuegbar {
+      color: green;
+      font-weight: bold;
+    }
+
+    .status-ausgeliehen {
+      color: red;
+      font-weight: bold;
+    }
+
+    .chip {
+      display: inline-block;
+      border: 1px solid #bbb;
+      background: white;
+      padding: 7px 12px;
+      border-radius: 18px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 16px;
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      font-size: 20px;
+      box-sizing: border-box;
+      margin-bottom: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 18px 20px;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .hint {
+      font-size: 16px;
+      color: #555;
+      margin-top: 24px;
+      line-height: 1.5;
+    }
+
+    @media (min-width: 700px) {
+      .box {
+        margin-top: 40px;
+        padding: 30px;
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      button {
+        width: auto;
+        min-width: 260px;
+      }
+
+      input {
+        max-width: 360px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+    <h1>{{ tool.name }}</h1>
+
+    <div class="info-card">
+      <div class="row">
+        <span class="label">Kategorie</span>
+        <span class="value">{{ tool.category }}</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Lagerort</span>
+        <span class="value">{{ tool.location }}</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Status</span>
+        <span class="value">
+          {% if tool.available > 0 %}
+            <span class="status-verfuegbar">verfügbar</span>
+          {% else %}
+            <span class="status-ausgeliehen">ausgeliehen</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="row">
+        <span class="label">Aktueller Nutzer</span>
+        <span class="value">
+          {% if open_loans %}
+            {% for l in open_loans %}
+              <span class="chip">{{ l.borrower }}</span>
+            {% endfor %}
+          {% else %}
+            -
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    {% if tool.available > 0 %}
+      <form method="POST" action="{{ url_for('borrow', tool_id=tool.id) }}">
+        <input type="text" name="borrower" placeholder="Ihr Name" required>
+        <button type="submit">Ausleihen</button>
+      </form>
+    {% else %}
+      {% for l in open_loans %}
+        <form method="GET" action="{{ url_for('return_prepare', loan_id=l.loan_id) }}">
+          <button type="submit">Zurückgeben ({{ l.borrower }})</button>
+        </form>
+      {% endfor %}
+    {% endif %}
+
+    <p class="hint">
+      Diese Seite wurde über den QR-Code geöffnet.<br>
+      Für die Rückgabe scannen Sie den QR-Code erneut und folgen Sie den Anweisungen.
+    </p>
+  </div>
+
+</body>
+</html>

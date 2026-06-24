@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vollständigkeit Foto aufnehmen</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      color: #222;
+      text-align: center;
+    }
+
+    .camera-area {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      box-sizing: border-box;
+    }
+
+    .camera-frame {
+      border: 4px solid white;
+      background: #222;
+      overflow: hidden;
+      position: relative;
+      border-radius: 10px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .camera-frame-landscape {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 4 / 3;
+    }
+
+    .camera-frame-portrait {
+      width: 70%;
+      max-width: 360px;
+      aspect-ratio: 3 / 4;
+    }
+
+    .camera-frame.alignment-enabled.not-aligned {
+      border-color: red;
+      box-shadow: 0 0 24px red;
+    }
+
+    .camera-frame.alignment-enabled.aligned {
+      border-color: lime;
+      box-shadow: 0 0 28px lime;
+    }
+
+    /*
+       Wichtig: Der echte <video>-Stream wird nicht direkt angezeigt.
+       Stattdessen zeichnen wir den Stream dauerhaft auf #liveCanvas.
+       Genau dieses Canvas wird später auch gespeichert.
+       Dadurch sieht das gespeicherte Bild genauso aus wie das Live-Bild.
+    */
+    video {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #liveCanvas {
+      display: block;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: black;
+    }
+
+    video::-webkit-media-controls {
+      display: none !important;
+    }
+
+    video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+      -webkit-appearance: none;
+    }
+
+    video::-webkit-media-controls-play-button {
+      display: none !important;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    #liveCanvas {
+      display: block;
+    }
+
+    .tool-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0.95;
+      transition: filter 0.15s ease;
+    }
+
+    .camera-frame.alignment-enabled.aligned .tool-overlay {
+      filter: hue-rotate(120deg) saturate(2.5) brightness(1.35);
+    }
+
+    .camera-frame.alignment-enabled.not-aligned .tool-overlay {
+      filter: none;
+    }
+
+    .alignment-status {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      z-index: 5;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      background: rgba(180, 0, 0, 0.85);
+      display: none;
+      min-width: 230px;
+    }
+
+    .alignment-status.aligned {
+      background: rgba(0, 150, 0, 0.85);
+    }
+
+    .debug-score {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 5;
+      padding: 6px 8px;
+      border-radius: 8px;
+      color: white;
+      background: rgba(0, 0, 0, 0.55);
+      font-size: 12px;
+      display: none;
+    }
+
+    .steck-test-button {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 6;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: none;
+      background: rgba(37, 99, 235, 0.9);
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      display: none;
+    }
+
+    .info-area {
+      padding: 22px;
+      box-sizing: border-box;
+      background: white;
+    }
+
+    h1 {
+      font-size: 30px;
+      margin: 8px 0 12px 0;
+      line-height: 1.15;
+    }
+
+    p {
+      font-size: 18px;
+      line-height: 1.45;
+      margin: 12px 0;
+    }
+
+    .tool {
+      font-weight: bold;
+      color: #2563eb;
+      font-size: 22px;
+    }
+
+    button {
+      width: 100%;
+      padding: 18px 20px;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      margin-top: 16px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    a {
+      display: block;
+      margin-top: 18px;
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 18px;
+    }
+
+    .warning {
+      color: red;
+      font-weight: bold;
+    }
+
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+
+    @media (min-width: 700px) {
+      button {
+        width: auto;
+        min-width: 280px;
+      }
+    }
+
+    /* ============================================================
+       Geführte Vollständigkeitsprüfung: Steckschlüssel + Ringschlüssel
+       Vollbild-Kamera mit 3:4-Frame
+       ============================================================ */
+
+    body.guided-fullscreen {
+      background: black;
+      overflow: hidden;
+    }
+
+    body.guided-fullscreen .camera-area {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      padding: 52px 0 82px 0;
+      z-index: 1;
+      background: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    body.guided-fullscreen .camera-frame-portrait {
+      width: min(100vw, calc((100dvh - 134px) * 0.75));
+      height: auto;
+      aspect-ratio: 3 / 4;
+      max-width: 100vw;
+      max-height: calc(100dvh - 134px);
+      border-radius: 0;
+      border-width: 5px;
+    }
+
+    body.guided-fullscreen .info-area {
+      display: none;
+    }
+
+    body.guided-fullscreen .alignment-status {
+      display: block;
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+      transform: translateX(-50%);
+      z-index: 40;
+      font-size: 18px;
+      padding: 12px 16px;
+      min-width: 280px;
+      max-width: calc(100vw - 32px);
+      box-sizing: border-box;
+      border-radius: 12px;
+      pointer-events: auto;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body.guided-fullscreen .debug-score {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 48px;
+      z-index: 40;
+      border-radius: 0;
+      background: black;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 0;
+    }
+
+    body.guided-fullscreen .steck-test-button {
+      display: none !important;
+    }
+  </style>
+</head>
+
+{% set is_steck = loan.tool_name == 'Steckschlüssel Set' %}
+{% set is_ring = loan.tool_name == 'Ringschlüssel Set' or loan.tool_name == 'Ringschlüsselset' %}
+{% set is_guided_slot_tool = is_steck or is_ring %}
+{% set is_portrait_tool = is_ring or loan.tool_name == 'Schraubendreher Set' or is_steck %}
+
+<body class="{% if is_guided_slot_tool %}guided-fullscreen{% endif %}">
+
+  <div class="camera-area">
+    <div
+      id="cameraFrame"
+      class="camera-frame
+      {% if is_portrait_tool %}
+        camera-frame-portrait
+      {% else %}
+        camera-frame-landscape
+      {% endif %}
+      {% if is_guided_slot_tool %}
+        alignment-enabled not-aligned
+      {% endif %}
+    ">
+
+      <video
+        id="video"
+        autoplay
+        playsinline
+        webkit-playsinline
+        muted
+        disablepictureinpicture
+        controlslist="nodownload noplaybackrate noremoteplayback"
+      ></video>
+
+      <canvas id="liveCanvas"></canvas>
+
+      {% if loan.tool_name == 'Akkuschrauber' %}
+        <img class="tool-overlay" src="{{ url_for('static', filename='overlays/akkuschrauber_overlay.png') }}">
+      {% elif loan.tool_name == 'Steckschlüssel Set' %}
+        <img
+          id="alignmentOverlay"
+          class="tool-overlay"
+          src="{{ url_for('static', filename='overlays/steckschluessel_overlay_live_portrait.png') }}"
+        >
+      {% elif loan.tool_name == 'Nadelfeilen Set' %}
+        <img class="tool-overlay" src="{{ url_for('static', filename='overlays/nadelfeilen_set_overlay.png') }}">
+      {% elif loan.tool_name == 'Ringschlüssel Set' or loan.tool_name == 'Ringschlüsselset' %}
+        <img
+          id="alignmentOverlay"
+          class="tool-overlay"
+          src="{{ url_for('static', filename='overlays/ringschluessel_overlay_live_portrait.png') }}"
+        >
+      {% elif loan.tool_name == 'Schraubendreher Set' %}
+        <img class="tool-overlay" src="{{ url_for('static', filename='overlays/schraubendreher_set_overlay.png') }}">
+      {% endif %}
+
+      {% if is_guided_slot_tool %}
+        <div id="alignmentStatus" class="alignment-status">
+          Bitte im Overlay ausrichten
+        </div>
+
+        <div id="debugScore" class="debug-score">
+          Ausrichtung: <span id="scoreValue">0</span>%
+        </div>
+
+      {% endif %}
+
+      <canvas id="canvas"></canvas>
+      <canvas id="analysisCanvas"></canvas>
+      <canvas id="overlayCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="info-area">
+    <h1>Vollständigkeit prüfen</h1>
+
+    <p>
+      Werkzeug:<br>
+      <span class="tool">{{ loan.tool_name }}</span>
+    </p>
+
+    {% if is_steck %}
+      <p>
+        Bitte richten Sie das Steckschlüsselset genau am roten Overlay aus.
+        Wenn es gut passt, wird das Overlay grün.
+      </p>
+    {% elif is_ring %}
+      <p>
+        Bitte richten Sie das Ringschlüsselset genau am roten Overlay aus.
+        Wenn es gut passt, wird das Overlay grün.
+      </p>
+    {% else %}
+      <p>
+        Bitte legen Sie das Werkzeug alleine, nah und passend in den angezeigten Umriss.
+      </p>
+    {% endif %}
+
+    <button type="button" onclick="takePhoto()">Take Photo</button>
+
+    <p id="message"></p>
+
+    <a href="{{ url_for('return_completeness_prepare', loan_id=loan.loan_id) }}">Zurück</a>
+  </div>
+
+  <p id="message-hidden" style="display:none;"></p>
+
+  <script>
+    /*
+      auto = 1: normales Verhalten. Bei guter Ausrichtung werden automatisch 3 Bilder aufgenommen.
+      auto = 0: keine automatische Aufnahme. Aufnahme nur durch Klick auf den roten/grünen Statusbereich.
+    */
+    let auto = 0;
+
+    const video = document.getElementById("video");
+    const liveCanvas = document.getElementById("liveCanvas");
+    const canvas = document.getElementById("canvas");
+    const analysisCanvas = document.getElementById("analysisCanvas");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const cameraFrame = document.getElementById("cameraFrame");
+
+    const visibleMessage = document.getElementById("message");
+    const hiddenMessage = document.getElementById("message-hidden");
+
+    const TOOL_NAME = "{{ loan.tool_name }}";
+    const IS_STECK = TOOL_NAME === "Steckschlüssel Set";
+    const IS_RING = TOOL_NAME === "Ringschlüssel Set" || TOOL_NAME === "Ringschlüsselset";
+    const IS_GUIDED_SLOT_TOOL = IS_STECK || IS_RING;
+
+    
+    const ALIGNMENT_THRESHOLD = IS_RING ? 0.83 : 0.83;
+    const EDGE_THRESHOLD = IS_RING ? 86 : 86;
+    const OVERLAY_SAMPLE_STEP = 4;
+    const SEARCH_RADIUS = IS_RING ? 1 : 1;
+
+    const GRID_COLS = 6;
+    const GRID_ROWS = 8;
+    const CELL_HIT_THRESHOLD = IS_RING ? 0.32 : 0.40;
+
+    const AUTO_CAPTURE_STABLE_MS = 500;
+    const AUTO_CAPTURE_DELAY_MS = 250;
+
+    let overlayPoints = [];
+    let overlayReady = false;
+
+    let lastGreenStartTime = null;
+    let autoCaptureRunning = false;
+    let latestAlignmentScore = 0;
+
+    let uploadedPhotoCount = 0;
+    let manualSingleCaptureRunning = false;
+
+    const alignmentStatus = document.getElementById("alignmentStatus");
+    const scoreValue = document.getElementById("scoreValue");
+    const alignmentOverlay = document.getElementById("alignmentOverlay");
+
+    if (alignmentStatus && IS_GUIDED_SLOT_TOOL) {
+      alignmentStatus.addEventListener("click", manualSingleCapture);
+      alignmentStatus.title = "Klicken: ein Foto aufnehmen und direkt analysieren";
+    }
+
+    function setMessage(text, className = "") {
+      if (visibleMessage) {
+        visibleMessage.innerHTML = text;
+        visibleMessage.className = className;
+      }
+
+      if (hiddenMessage) {
+        hiddenMessage.innerHTML = text;
+        hiddenMessage.className = className;
+      }
+    }
+
+    function waitMs(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function isCurrentlyAligned() {
+      return latestAlignmentScore >= ALIGNMENT_THRESHOLD;
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 4032 },
+            height: { ideal: 3024 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        video.muted = true;
+        video.controls = false;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
+
+        await video.play();
+
+        
+        requestAnimationFrame(drawCurrentVideoFrameToLiveCanvas);
+
+        if (IS_GUIDED_SLOT_TOOL) {
+          prepareOverlayMask();
+          requestAnimationFrame(processAlignmentFrame);
+        }
+
+      } catch (error) {
+        setMessage("Kamera konnte nicht geöffnet werden.", "warning");
+        console.error(error);
+      }
+    }
+
+    function prepareOverlayMask() {
+      if (!alignmentOverlay || !alignmentOverlay.complete) {
+        if (alignmentOverlay) {
+          alignmentOverlay.onload = prepareOverlayMask;
+        }
+        return;
+      }
+
+      const maskW = 180;
+      const maskH = 240;
+
+      overlayCanvas.width = maskW;
+      overlayCanvas.height = maskH;
+
+      const ctx = overlayCanvas.getContext("2d");
+      ctx.clearRect(0, 0, maskW, maskH);
+      ctx.drawImage(alignmentOverlay, 0, 0, maskW, maskH);
+
+      const imgData = ctx.getImageData(0, 0, maskW, maskH);
+      const data = imgData.data;
+
+      overlayPoints = [];
+
+      for (let y = 0; y < maskH; y += OVERLAY_SAMPLE_STEP) {
+        for (let x = 0; x < maskW; x += OVERLAY_SAMPLE_STEP) {
+          const idx = (y * maskW + x) * 4;
+
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const a = data[idx + 3];
+
+          const isRedOverlay =
+            a > 40 &&
+            r > 100 &&
+            r > g * 1.5 &&
+            r > b * 1.5;
+
+          if (isRedOverlay) {
+            overlayPoints.push({ x, y });
+          }
+        }
+      }
+
+      overlayReady = overlayPoints.length > 50;
+      console.log("Overlay-Punkte:", overlayPoints.length);
+    }
+
+    function getCropFromVideo(targetAspect) {
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+
+      const videoAspect = videoWidth / videoHeight;
+
+      let sx, sy, sWidth, sHeight;
+
+      if (videoAspect > targetAspect) {
+        sHeight = videoHeight;
+        sWidth = videoHeight * targetAspect;
+        sx = (videoWidth - sWidth) / 2;
+        sy = 0;
+      } else {
+        sWidth = videoWidth;
+        sHeight = videoWidth / targetAspect;
+        sx = 0;
+        sy = (videoHeight - sHeight) / 2;
+      }
+
+      return { sx, sy, sWidth, sHeight };
+    }
+
+
+    function getTargetAspectForCurrentTool() {
+      const isPortraitTool =
+        TOOL_NAME === "Ringschlüssel Set" ||
+        TOOL_NAME === "Schraubendreher Set" ||
+        TOOL_NAME === "Steckschlüssel Set";
+
+      return isPortraitTool ? (3 / 4) : (4 / 3);
+    }
+
+    function getLiveCanvasSize(targetAspect) {
+      
+      if (targetAspect < 1) {
+        return { width: 900, height: 1200 };
+      }
+
+      return { width: 1600, height: 1200 };
+    }
+
+    function drawCurrentVideoFrameToLiveCanvas() {
+      if (!video.videoWidth || !video.videoHeight) {
+        requestAnimationFrame(drawCurrentVideoFrameToLiveCanvas);
+        return;
+      }
+
+      const targetAspect = getTargetAspectForCurrentTool();
+      const crop = getCropFromVideo(targetAspect);
+      const size = getLiveCanvasSize(targetAspect);
+
+      if (liveCanvas.width !== size.width || liveCanvas.height !== size.height) {
+        liveCanvas.width = size.width;
+        liveCanvas.height = size.height;
+      }
+
+      const ctx = liveCanvas.getContext("2d");
+
+      ctx.drawImage(
+        video,
+        crop.sx, crop.sy, crop.sWidth, crop.sHeight,
+        0, 0, liveCanvas.width, liveCanvas.height
+      );
+
+      requestAnimationFrame(drawCurrentVideoFrameToLiveCanvas);
+    }
+
+    function calculateGuidedAlignmentScore() {
+      if (!overlayReady || !video.videoWidth || !video.videoHeight) {
+        return 0;
+      }
+
+      const w = 180;
+      const h = 240;
+
+      analysisCanvas.width = w;
+      analysisCanvas.height = h;
+
+      const ctx = analysisCanvas.getContext("2d");
+
+      ctx.drawImage(
+        liveCanvas,
+        0, 0, liveCanvas.width, liveCanvas.height,
+        0, 0, w, h
+      );
+
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      const gray = new Uint8ClampedArray(w * h);
+
+      for (let i = 0; i < w * h; i++) {
+        const idx = i * 4;
+        gray[i] = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      }
+
+      const edge = new Uint8Array(w * h);
+
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const i = y * w + x;
+
+          const gx = Math.abs(gray[i + 1] - gray[i - 1]);
+          const gy = Math.abs(gray[i + w] - gray[i - w]);
+
+          if (gx + gy > EDGE_THRESHOLD) {
+            edge[i] = 1;
+          }
+        }
+      }
+
+      let hits = 0;
+      let total = 0;
+
+      const cellTotal = new Array(GRID_COLS * GRID_ROWS).fill(0);
+      const cellHits = new Array(GRID_COLS * GRID_ROWS).fill(0);
+
+      for (const p of overlayPoints) {
+        total++;
+
+        const cellX = Math.min(GRID_COLS - 1, Math.floor((p.x / w) * GRID_COLS));
+        const cellY = Math.min(GRID_ROWS - 1, Math.floor((p.y / h) * GRID_ROWS));
+        const cellIndex = cellY * GRID_COLS + cellX;
+
+        cellTotal[cellIndex]++;
+
+        let found = false;
+
+        for (let dy = -SEARCH_RADIUS; dy <= SEARCH_RADIUS && !found; dy++) {
+          for (let dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
+            const xx = p.x + dx;
+            const yy = p.y + dy;
+
+            if (xx < 1 || yy < 1 || xx >= w - 1 || yy >= h - 1) {
+              continue;
+            }
+
+            if (edge[yy * w + xx] === 1) {
+              found = true;
+              break;
+            }
+          }
+        }
+
+        if (found) {
+          hits++;
+          cellHits[cellIndex]++;
+        }
+      }
+
+      if (total === 0) {
+        return 0;
+      }
+
+      const pointScore = hits / total;
+
+      let activeCells = 0;
+      let goodCells = 0;
+
+      for (let i = 0; i < cellTotal.length; i++) {
+        if (cellTotal[i] > 5) {
+          activeCells++;
+
+          const ratio = cellHits[i] / cellTotal[i];
+
+          if (ratio >= CELL_HIT_THRESHOLD) {
+            goodCells++;
+          }
+        }
+      }
+
+      const cellScore = activeCells > 0 ? goodCells / activeCells : 0;
+
+      let finalScore;
+
+      if (IS_RING) {
+        
+        finalScore = (pointScore * 0.70) + (cellScore * 0.30);
+      } else {
+       
+        finalScore = (pointScore * 0.35) + (cellScore * 0.65);
+      }
+
+      return finalScore;
+    }
+
+    function setAlignmentState(score) {
+      latestAlignmentScore = score;
+
+      const isAligned = score >= ALIGNMENT_THRESHOLD;
+      const now = Date.now();
+
+      if (isAligned) {
+        cameraFrame.classList.add("aligned");
+        cameraFrame.classList.remove("not-aligned");
+
+        alignmentStatus.classList.add("aligned");
+
+        if (!autoCaptureRunning) {
+          if (auto === 1) {
+            alignmentStatus.innerHTML = "Gut ausgerichtet – ruhig halten";
+          } else {
+            alignmentStatus.innerHTML = "Gut ausgerichtet – klicken zum Aufnehmen";
+          }
+        }
+
+        if (lastGreenStartTime === null) {
+          lastGreenStartTime = now;
+        }
+
+        const stableTime = now - lastGreenStartTime;
+
+        if (auto === 1 && stableTime >= AUTO_CAPTURE_STABLE_MS && !autoCaptureRunning) {
+          autoCaptureThreeImages();
+        }
+
+      } else {
+        cameraFrame.classList.add("not-aligned");
+        cameraFrame.classList.remove("aligned");
+
+        alignmentStatus.classList.remove("aligned");
+
+        if (!autoCaptureRunning) {
+          if (auto === 1) {
+            alignmentStatus.innerHTML = "Bitte im Overlay ausrichten";
+          } else {
+            alignmentStatus.innerHTML = "Bitte ausrichten – klicken zum Aufnehmen";
+          }
+        }
+
+        lastGreenStartTime = null;
+      }
+
+      scoreValue.innerHTML = Math.round(score * 100).toString();
+    }
+
+    function processAlignmentFrame() {
+      if (IS_GUIDED_SLOT_TOOL) {
+        const score = calculateGuidedAlignmentScore();
+        setAlignmentState(score);
+      }
+
+      requestAnimationFrame(processAlignmentFrame);
+    }
+
+    async function waitUntilGreenStable(requiredMs = 500, photoNumber = 1) {
+      let greenStart = null;
+
+      while (true) {
+        if (!autoCaptureRunning) {
+          throw new Error("Auto-Capture wurde beendet.");
+        }
+
+        if (isCurrentlyAligned()) {
+          if (greenStart === null) {
+            greenStart = Date.now();
+          }
+
+          const stableTime = Date.now() - greenStart;
+
+          alignmentStatus.classList.add("aligned");
+          alignmentStatus.innerHTML =
+            `Bild ${photoNumber}/3: ruhig halten ${(stableTime / 1000).toFixed(1)}s`;
+
+          if (stableTime >= requiredMs) {
+            return;
+          }
+
+        } else {
+          greenStart = null;
+
+          alignmentStatus.classList.remove("aligned");
+          alignmentStatus.innerHTML =
+            `Bild ${photoNumber}/3: bitte wieder ausrichten`;
+        }
+
+        await waitMs(50);
+      }
+    }
+
+    async function manualSingleCapture() {
+      if (!IS_GUIDED_SLOT_TOOL) {
+        return;
+      }
+
+      if (autoCaptureRunning || manualSingleCaptureRunning) {
+        return;
+      }
+
+      manualSingleCaptureRunning = true;
+      autoCaptureRunning = true;
+
+      try {
+        alignmentStatus.classList.add("aligned");
+        alignmentStatus.innerHTML = "Ein Foto wird aufgenommen...";
+
+        await takePhotoWithoutRedirect(1, true);
+
+        alignmentStatus.innerHTML = "Bild gespeichert – Analyse läuft...";
+
+        if (window.lastResultUrl) {
+          window.location.href = window.lastResultUrl;
+        }
+
+      } catch (error) {
+        console.error(error);
+        alignmentStatus.classList.remove("aligned");
+        alignmentStatus.innerHTML = "Fehler beim Foto – bitte erneut versuchen";
+        autoCaptureRunning = false;
+        manualSingleCaptureRunning = false;
+      }
+    }
+
+    async function autoCaptureThreeImages() {
+      if (autoCaptureRunning) {
+        return;
+      }
+
+      autoCaptureRunning = true;
+      uploadedPhotoCount = 0;
+
+      try {
+        for (let i = 1; i <= 3; i++) {
+          alignmentStatus.innerHTML = `Warte auf Ausrichtung für Bild ${i}/3...`;
+
+          await waitUntilGreenStable(AUTO_CAPTURE_STABLE_MS, i);
+
+          alignmentStatus.classList.add("aligned");
+          alignmentStatus.innerHTML = `Aufnahme ${i}/3...`;
+
+          await takePhotoWithoutRedirect(i);
+
+          uploadedPhotoCount = i;
+
+          await waitMs(AUTO_CAPTURE_DELAY_MS);
+        }
+
+        alignmentStatus.classList.add("aligned");
+        alignmentStatus.innerHTML = "3 Bilder gespeichert – Prüfung läuft...";
+
+        if (window.lastResultUrl) {
+          window.location.href = window.lastResultUrl;
+        }
+
+      } catch (error) {
+        console.warn(error.message);
+
+        alignmentStatus.classList.remove("aligned");
+        alignmentStatus.innerHTML = "Aufnahme abgebrochen – bitte neu ausrichten";
+
+        await waitMs(800);
+
+      } finally {
+        autoCaptureRunning = false;
+        lastGreenStartTime = null;
+      }
+    }
+
+    async function takePhotoWithoutRedirect(photoNumber = 1, manualSingle = false) {
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+
+      if (!videoWidth || !videoHeight) {
+        setMessage("Kamera ist noch nicht bereit. Bitte kurz warten.", "warning");
+        return;
+      }
+
+      const targetAspect = getTargetAspectForCurrentTool();
+      const size = getLiveCanvasSize(targetAspect);
+
+      
+      if (liveCanvas.width !== size.width || liveCanvas.height !== size.height) {
+        liveCanvas.width = size.width;
+        liveCanvas.height = size.height;
+      }
+
+      if (TOOL_NAME === "Steckschlüssel Set") {
+        canvas.width = liveCanvas.height;
+        canvas.height = liveCanvas.width;
+
+        const context = canvas.getContext("2d");
+
+        context.save();
+        context.translate(0, canvas.height);
+        context.rotate(-Math.PI / 2);
+        context.drawImage(liveCanvas, 0, 0, liveCanvas.width, liveCanvas.height);
+        context.restore();
+
+      } else {
+        canvas.width = liveCanvas.width;
+        canvas.height = liveCanvas.height;
+
+        const context = canvas.getContext("2d");
+        context.drawImage(liveCanvas, 0, 0, canvas.width, canvas.height);
+      }
+
+      if (manualSingle) {
+        setMessage("Bild wird gespeichert...", "");
+      } else {
+        setMessage(`Bild ${photoNumber}/3 wird gespeichert...`, "");
+      }
+
+      const imageData = canvas.toDataURL("image/jpeg", 0.98);
+
+      try {
+        const response = await fetch("{{ url_for('save_completeness_photo', loan_id=loan.loan_id) }}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            image: imageData,
+            photo_number: photoNumber,
+            photo_count: manualSingle ? 1 : 3,
+            auto_capture: IS_GUIDED_SLOT_TOOL && !manualSingle,
+            manual_single: manualSingle
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          window.lastResultUrl = result.result_url;
+          if (manualSingle) {
+            setMessage("Bild gespeichert. Analyse startet...", "success");
+          } else {
+            setMessage(`Bild ${photoNumber}/3 gespeichert.`, "success");
+          }
+        } else {
+          setMessage("Foto konnte nicht gespeichert werden.", "warning");
+          throw new Error("Upload fehlgeschlagen.");
+        }
+
+      } catch (error) {
+        setMessage("Fehler beim Speichern des Fotos.", "warning");
+        console.error(error);
+        throw error;
+      }
+    }
+
+    async function takePhoto() {
+      await takePhotoWithoutRedirect(1);
+
+      if (window.lastResultUrl) {
+        window.location.href = window.lastResultUrl;
+      }
+    }
+
+    startCamera();
+  </script>
+
+</body>
+</html>

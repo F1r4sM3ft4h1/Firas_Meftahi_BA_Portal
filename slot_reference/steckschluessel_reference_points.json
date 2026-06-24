@@ -1,0 +1,27 @@
+{
+    "reference_image": "C:\\Users\\mefte\\OneDrive\\Documents\\Bachelorarbeit\\Portal\\Labormanagement_System_Werkzeugverwaltung\\Bachelor\\Current\\slot_reference\\steckschluessel_set_reference.jpg",
+    "points_order": [
+        "oben_links",
+        "oben_rechts",
+        "unten_rechts",
+        "unten_links"
+    ],
+    "points": [
+        [
+            564,
+            1065
+        ],
+        [
+            1020,
+            1058
+        ],
+        [
+            2394,
+            1975
+        ],
+        [
+            551,
+            1985
+        ]
+    ]
+}

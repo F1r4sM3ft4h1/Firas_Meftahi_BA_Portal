@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Materialverwaltung</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 20px;
+      color: #222;
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    th, td {
+      border: 1px solid #d0d7de;
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 18px;
+      background: #1f2937;
+      color: white;
+    }
+
+    input {
+      padding: 6px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #2563eb;
+      color: white;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .top-links p {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Materialverwaltung</h1>
+
+  <div class="top-links">
+    <p><a href="{{ url_for('index') }}">Zurück zur Werkzeugübersicht</a></p>
+    <p><a href="{{ url_for('materials_history') }}">Materialhistorie anzeigen</a></p>
+  </div>
+
+  <form method="GET" action="{{ url_for('materials') }}">
+    <input type="text" name="search" placeholder="Material, Variante oder Lagerort suchen" value="{{ search }}">
+    <button type="submit">Suchen</button>
+  </form>
+
+  <table>
+    <tr>
+      <th>Material</th>
+      <th>Variante</th>
+      <th>Kategorie</th>
+      <th>Lagerort</th>
+      <th>Bestand</th>
+      <th>Aktion</th>
+    </tr>
+
+    {% for material in materials %}
+    <tr>
+      <td>
+    <a href="{{ url_for('material_detail', material_id=material.id) }}">
+        {{ material.name }}
+    </a>
+</td>
+      <td>{{ material.variant if material.variant else "-" }}</td>
+      <td>{{ material.category }}</td>
+      <td>{{ material.location }}</td>
+      <td>{{ material.quantity }}</td>
+      <td>
+        <div class="actions">
+          <form method="POST" action="{{ url_for('take_material', material_id=material.id) }}">
+            <input type="text" name="user_name" placeholder="Name" required>
+            <input type="number" name="amount" min="1" placeholder="Menge" required>
+            <button type="submit">Entnehmen</button>
+          </form>
+
+          <form method="POST" action="{{ url_for('return_material', material_id=material.id) }}">
+            <input type="text" name="user_name" placeholder="Name" required>
+            <input type="number" name="amount" min="1" placeholder="Menge" required>
+            <button type="submit">Zurückgeben</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Werkzeugdetails</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 20px;
+      color: #222;
+    }
+
+    h1 {
+      font-size: 34px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-top: 30px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 75%;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #d0d7de;
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #1f2937;
+      color: white;
+      width: 220px;
+    }
+
+    input {
+      padding: 6px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 7px 13px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #2563eb;
+      color: white;
+      margin: 3px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .danger {
+      background: #dc2626;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .chip {
+      display: inline-block;
+      border: 1px solid #bbb;
+      background: #f8fafc;
+      padding: 3px 9px;
+      margin: 2px;
+      border-radius: 12px;
+    }
+
+    .status-verfuegbar {
+      color: green;
+      font-weight: bold;
+    }
+
+    .status-ausgeliehen {
+      color: red;
+      font-weight: bold;
+    }
+
+    a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Admin: Werkzeugdetails</h1>
+
+  <p><a href="{{ url_for('index') }}">Zurück zur Admin-Übersicht</a></p>
+
+  <table>
+    <tr>
+      <th>Name</th>
+      <td>{{ tool.name }}</td>
+    </tr>
+    <tr>
+      <th>Kategorie</th>
+      <td>{{ tool.category }}</td>
+    </tr>
+    <tr>
+      <th>Lagerort</th>
+      <td>{{ tool.location }}</td>
+    </tr>
+    <tr>
+      <th>Gesamtbestand</th>
+      <td>{{ tool.total_quantity }}</td>
+    </tr>
+    <tr>
+      <th>Verfügbar</th>
+      <td>{{ tool.available }}</td>
+    </tr>
+    <tr>
+      <th>Status</th>
+      <td>
+        {% if tool.available > 0 %}
+          <span class="status-verfuegbar">verfügbar</span>
+        {% else %}
+          <span class="status-ausgeliehen">ausgeliehen</span>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Aktuelle Nutzer</th>
+      <td>
+        {% if open_loans %}
+          {% for l in open_loans %}
+            <span class="chip">{{ l.borrower }}</span>
+          {% endfor %}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <h2>Admin-Aktionen</h2>
+
+  <div class="actions">
+    <form method="POST" action="{{ url_for('borrow', tool_id=tool.id) }}">
+      <input type="text" name="borrower" placeholder="Name" required />
+      <button type="submit" {% if tool.available <= 0 %}disabled{% endif %}>Ausleihen</button>
+    </form>
+
+    {% for l in open_loans %}
+      <form method="POST" action="{{ url_for('return_loan', loan_id=l.loan_id) }}">
+        <button type="submit" onclick="return confirm('Werkzeug ohne Bilderkennung zurückgeben?')">
+          Direkt zurückgeben ({{ l.borrower }})
+        </button>
+      </form>
+    {% endfor %}
+
+    <form method="POST" action="{{ url_for('delete_tool', tool_id=tool.id) }}">
+      <button class="danger" type="submit" onclick="return confirm('Werkzeug wirklich löschen?')">
+        Werkzeug löschen
+      </button>
+    </form>
+  </div>
+
+  <h2>Studenten-QR-Code</h2>
+  <p>Dieser QR-Code führt zur Studenten-Seite mit Bilderkennung:</p>
+  <p><a href="{{ qr_url }}">{{ qr_url }}</a></p>
+  <img src="{{ url_for('static', filename=qr_image) }}" width="200">
+
+  <h2>Ausleihhistorie dieses Werkzeugs</h2>
+
+  <table>
+    <tr>
+      <th>Entleiher</th>
+      <th>Ausgeliehen am</th>
+      <th>Zurückgegeben am</th>
+      <th>Status</th>
+    </tr>
+
+    {% if loan_history %}
+      {% for entry in loan_history %}
+        <tr>
+          <td>{{ entry.borrower }}</td>
+          <td>{{ entry.checkout_ts }}</td>
+          <td>{{ entry.return_ts if entry.return_ts else "-" }}</td>
+          <td>
+            {% if entry.return_ts %}
+              abgeschlossen
+            {% else %}
+              offen
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="4">Keine Ausleihhistorie vorhanden.</td>
+      </tr>
+    {% endif %}
+  </table>
+
+</body>
+</html>

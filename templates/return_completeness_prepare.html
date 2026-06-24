@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vollständigkeit prüfen</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      color: #222;
+      text-align: center;
+    }
+
+    .box {
+      background: white;
+      width: calc(100% - 24px);
+      max-width: 650px;
+      margin: 18px auto;
+      padding: 28px 22px;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 34px;
+      margin: 8px 0 24px 0;
+      color: green;
+      line-height: 1.15;
+    }
+
+    p {
+      font-size: 21px;
+      line-height: 1.45;
+      margin: 18px 0;
+    }
+
+    .tool {
+      font-weight: bold;
+      color: #2563eb;
+      font-size: 25px;
+    }
+
+    button {
+      width: 100%;
+      padding: 18px 20px;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: white;
+      margin-top: 24px;
+    }
+
+    a {
+      display: block;
+      margin-top: 24px;
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 18px;
+    }
+
+    @media (min-width: 700px) {
+      .box {
+        margin-top: 60px;
+        padding: 35px;
+      }
+
+      h1 {
+        font-size: 40px;
+      }
+
+      button {
+        width: auto;
+        min-width: 280px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+    <h1>Werkzeug wurde erkannt</h1>
+
+    <p>
+      Das Werkzeug<br>
+      <span class="tool">{{ loan.tool_name }}</span><br>
+      wurde erkannt.
+    </p>
+
+    <p>
+      Bitte nehmen Sie jetzt ein zweites Bild vom Werkzeug alleine auf.
+      Legen Sie es möglichst nah und passend in den Rahmen.
+    </p>
+
+    <form method="GET" action="{{ url_for('return_completeness_camera', loan_id=loan.loan_id) }}">
+      <button type="submit">Weiter</button>
+    </form>
+
+    <a href="{{ url_for('return_camera', loan_id=loan.loan_id) }}">Zurück</a>
+  </div>
+
+</body>
+</html>
